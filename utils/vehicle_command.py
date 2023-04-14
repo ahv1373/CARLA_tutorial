@@ -3,7 +3,7 @@ import numpy as np
 
 
 class VehicleCommand:
-    def __init__(self, throttle: float= 0.0, steer: float = 0.0, brake: float = 0.0,
+    def __init__(self, throttle: float = 0.0, steer: float = 0.0, brake: float = 0.0,
                  hand_brake: bool = False, reverse: bool = False):
         self.time_stamp = None
         self.throttle = throttle
