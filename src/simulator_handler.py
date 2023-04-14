@@ -13,15 +13,15 @@ class SimulatorHandler:
         self.vehicle = None
         self.rgb_cam_sensor = None
         self.bp = None
-        if not os.path.exists("data"):
-            os.mkdir("data")
+        if not os.path.exists(os.path.join("data", "rgb_cam")):
+            os.makedirs(os.path.join("data", "rgb_cam"))
 
         try:
             client = carla.Client("localhost", 2000)
             client.set_timeout(8.0)
             self.world = client.get_world()
             if os.path.basename(self.world.get_map().name) != town_name:
-                self.world: carla.World = self.client.load_world(town_name)
+                self.world: carla.World = client.load_world(town_name)
 
             self.blueprint_library = self.world.get_blueprint_library()
             self.actor_list = []
@@ -34,6 +34,7 @@ class SimulatorHandler:
         self.clock = None
         self.font = None
         self.display = None
+        self.visualize()
         self.imu_dict = {"timestamp": [],
                          "accelerometer_x": [],
                          "accelerometer_y": [],
@@ -130,7 +131,7 @@ class SimulatorHandler:
         # create a pandas dataframe
         imu_df = pd.DataFrame(self.imu_dict)
         # save the dataframe to a csv file
-        imu_df.to_csv("data/imu/imu.csv", index=False)
+        imu_df.to_csv("data/imu.csv", index=False)
 
     def gnss_callback(self, gnss):
         self.gnss_dict["timestamp"].append(gnss.timestamp)
@@ -138,4 +139,4 @@ class SimulatorHandler:
         self.gnss_dict["longitude"].append(gnss.longitude)
         self.gnss_dict["altitude"].append(gnss.altitude)
         gnss_df = pd.DataFrame(self.gnss_dict)
-        gnss_df.to_csv("data/gnss/gnss.csv", index=False)
+        gnss_df.to_csv("data/gnss.csv", index=False)
