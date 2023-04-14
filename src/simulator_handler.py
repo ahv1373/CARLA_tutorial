@@ -1,10 +1,9 @@
-import copy
 import os
 
 import carla
+import cv2
 import numpy as np
 import pandas as pd
-import pygame
 
 
 class SimulatorHandler:
@@ -26,15 +25,11 @@ class SimulatorHandler:
             self.blueprint_library = self.world.get_blueprint_library()
             self.actor_list = []
             self.vehicle_list = []
-            self.IM_WIDTH = 1280  # Ideally a config file should be defined for such parameters
-            self.IM_HEIGHT = 720
+            self.IM_WIDTH = 800  # Ideally a config file should be defined for such parameters
+            self.IM_HEIGHT = 600
         except Exception as error:
             raise Exception(f"Error while initializing the simulator: {error}")
 
-        self.clock = None
-        self.font = None
-        self.display = None
-        self.visualize()
         self.imu_dict = {"timestamp": [],
                          "accelerometer_x": [],
                          "accelerometer_y": [],
@@ -93,32 +88,12 @@ class SimulatorHandler:
 
     def rgb_cam_callback(self, image):
         image.save_to_disk("data/rgb_cam/%06d.jpg" % image.frame)
+        raw_image = np.array(image.raw_data)
 
-        # visualize the image with pygame
-        img_array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
-        img_array = np.reshape(img_array, (image.height, image.width, 4))
-        img_array = img_array[:, :, :3]
-        img_array = img_array[:, :, ::-1]
-        image_rgb = copy.copy(img_array)
-        self.draw_image_np(self.display, image_rgb)
-
-    @staticmethod
-    def draw_image_np(surface, image, blend=False):
-        array = image
-        image_surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
-        if blend:
-            image_surface.set_alpha(100)
-        surface.blit(image_surface, (0, 0))
-
-    def visualize(self):
-        main_image_shape = (800, 600)
-        pygame.init()
-        self.display = pygame.display.set_mode(
-            main_image_shape,
-            pygame.HWSURFACE | pygame.DOUBLEBUF)
-        self.font = pygame.font.SysFont("monospace", 15)
-        self.clock = pygame.time.Clock()
-        pygame.display.flip()
+        rgba_image = raw_image.reshape((self.IM_HEIGHT, self.IM_WIDTH, 4))  # because carla rgb cam is rgba
+        rgb_image = rgba_image[:, :, :3]
+        # cv2.imshow("rgb camera", rgb_image)  # FixMe: Replace with pygame visualization
+        # cv2.waitKey(1)
 
     def imu_callback(self, imu):  # accelerometer is m/s^2 and gyroscope data is rad/sec
         self.imu_dict["timestamp"].append(imu.timestamp)
