@@ -4,6 +4,7 @@ import carla
 import cv2
 import numpy as np
 import pandas as pd
+from matplotlib import pyplot as plt
 
 
 class SimulatorHandler:
@@ -11,11 +12,17 @@ class SimulatorHandler:
         self.spawn_point = None
         self.vehicle = None
         self.rgb_cam_sensor = None
-        self.bp = None
-        if not os.path.exists(os.path.join("data", "rgb_cam")):
-            os.makedirs(os.path.join("data", "rgb_cam"))
+        self.vehicle_blueprint = None
+
+        # create data save directories (if they don't exist)
+        self.save_dir = os.path.join(os.path.dirname(__file__), "data")
+        if not os.path.exists(self.save_dir):
+            os.makedirs(self.save_dir)
+        if not os.path.exists(os.path.join(self.save_dir, "rgb_cam")):
+            os.makedirs(os.path.join(self.save_dir, "rgb_cam"))
 
         try:
+            print("Trying to communicate with the client...")
             client = carla.Client("localhost", 2000)
             client.set_timeout(8.0)
             self.world = client.get_world()
@@ -27,25 +34,17 @@ class SimulatorHandler:
             self.vehicle_list = []
             self.IM_WIDTH = 800  # Ideally a config file should be defined for such parameters
             self.IM_HEIGHT = 600
+            print("Successfully connected to CARLA client")
         except Exception as error:
             raise Exception(f"Error while initializing the simulator: {error}")
 
-        self.imu_dict = {"timestamp": [],
-                         "accelerometer_x": [],
-                         "accelerometer_y": [],
-                         "accelerometer_z": [],
-                         "gyroscope_x": [],
-                         "gyroscope_y": [],
-                         "gyroscope_z": []}
-        self.gnss_dict = {"timestamp": [],
-                          "latitude": [],
-                          "longitude": [],
-                          "altitude": []}
+        self.imu_dataframe = pd.DataFrame({})
+        self.gnss_dataframe = pd.DataFrame({})
 
     def spawn_vehicle(self, spawn_index: int = 90):
-        self.bp = self.blueprint_library.filter("model3")[0]  # choosing the car
+        self.vehicle_blueprint = self.blueprint_library.filter("model3")[0]  # choosing the car
         self.spawn_point = self.world.get_map().get_spawn_points()[spawn_index]
-        self.vehicle = self.world.spawn_actor(self.bp, self.spawn_point)
+        self.vehicle = self.world.spawn_actor(self.vehicle_blueprint, self.spawn_point)
         self.actor_list.append(self.vehicle)
 
     def set_weather(self, weather=carla.WeatherParameters.ClearNoon):
@@ -80,7 +79,6 @@ class SimulatorHandler:
         imu_location = carla.Location(0, 0, 0)
         imu_rotation = carla.Rotation(0, 0, 0)
         imu_transform = carla.Transform(imu_location, imu_rotation)
-        # imu_sensor.set_attribute("sensor_tick", str(3.0))
         ego_imu = self.world.spawn_actor(imu_sensor, imu_transform, attach_to=self.vehicle,
                                          attachment_type=carla.AttachmentType.Rigid)
         self.actor_list.append(ego_imu)
@@ -92,26 +90,31 @@ class SimulatorHandler:
 
         rgba_image = raw_image.reshape((self.IM_HEIGHT, self.IM_WIDTH, 4))  # because carla rgb cam is rgba
         rgb_image = rgba_image[:, :, :3]
+        rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB)
+        plt.imshow(rgb_image)
+        plt.show()
         # cv2.imshow("rgb camera", rgb_image)  # FixMe: Replace with pygame visualization
         # cv2.waitKey(1)
 
     def imu_callback(self, imu):  # accelerometer is m/s^2 and gyroscope data is rad/sec
-        self.imu_dict["timestamp"].append(imu.timestamp)
-        self.imu_dict["accelerometer_x"].append(imu.accelerometer.x)
-        self.imu_dict["accelerometer_y"].append(imu.accelerometer.y)
-        self.imu_dict["accelerometer_z"].append(imu.accelerometer.z)
-        self.imu_dict["gyroscope_x"].append(imu.gyroscope.x)
-        self.imu_dict["gyroscope_y"].append(imu.gyroscope.y)
-        self.imu_dict["gyroscope_z"].append(imu.gyroscope.z)
+        imu_dict = {}
+        imu_dict["timestamp"].append(imu.timestamp)
+        imu_dict["accelerometer_x"].append(imu.accelerometer.x)
+        imu_dict["accelerometer_y"].append(imu.accelerometer.y)
+        imu_dict["accelerometer_z"].append(imu.accelerometer.z)
+        imu_dict["gyroscope_x"].append(imu.gyroscope.x)
+        imu_dict["gyroscope_y"].append(imu.gyroscope.y)
+        imu_dict["gyroscope_z"].append(imu.gyroscope.z)
         # create a pandas dataframe
-        imu_df = pd.DataFrame(self.imu_dict)
+        self.imu_dataframe = self.imu_dataframe.append(imu_dict, ignore_index=True)
         # save the dataframe to a csv file
-        imu_df.to_csv("data/imu.csv", index=False)
+        self.imu_dataframe.to_csv(os.path.join(self.save_dir, "imu.csv"), index=False)
 
     def gnss_callback(self, gnss):
-        self.gnss_dict["timestamp"].append(gnss.timestamp)
-        self.gnss_dict["latitude"].append(gnss.latitude)
-        self.gnss_dict["longitude"].append(gnss.longitude)
-        self.gnss_dict["altitude"].append(gnss.altitude)
-        gnss_df = pd.DataFrame(self.gnss_dict)
-        gnss_df.to_csv("data/gnss.csv", index=False)
+        gnss_dict = {}
+        gnss_dict["timestamp"].append(gnss.timestamp)
+        gnss_dict["latitude"].append(gnss.latitude)
+        gnss_dict["longitude"].append(gnss.longitude)
+        gnss_dict["altitude"].append(gnss.altitude)
+        self.gnss_dataframe = self.gnss_dataframe.append(gnss_dict, ignore_index=True)
+        self.gnss_dataframe.to_csv(os.path.join(self.save_dir, "gnss.csv"), index=False)
