@@ -98,13 +98,13 @@ class SimulatorHandler:
 
     def imu_callback(self, imu):  # accelerometer is m/s^2 and gyroscope data is rad/sec
         imu_dict = {}
-        imu_dict["timestamp"].append(imu.timestamp)
-        imu_dict["accelerometer_x"].append(imu.accelerometer.x)
-        imu_dict["accelerometer_y"].append(imu.accelerometer.y)
-        imu_dict["accelerometer_z"].append(imu.accelerometer.z)
-        imu_dict["gyroscope_x"].append(imu.gyroscope.x)
-        imu_dict["gyroscope_y"].append(imu.gyroscope.y)
-        imu_dict["gyroscope_z"].append(imu.gyroscope.z)
+        imu_dict["timestamp"] = imu.timestamp
+        imu_dict["accelerometer_x"] = imu.accelerometer.x
+        imu_dict["accelerometer_y"] = imu.accelerometer.y
+        imu_dict["accelerometer_z"] = imu.accelerometer.z
+        imu_dict["gyroscope_x"] = imu.gyroscope.x
+        imu_dict["gyroscope_y"] = imu.gyroscope.y
+        imu_dict["gyroscope_z"] = imu.gyroscope.z
         # create a pandas dataframe
         self.imu_dataframe = self.imu_dataframe.append(imu_dict, ignore_index=True)
         # save the dataframe to a csv file
@@ -112,9 +112,9 @@ class SimulatorHandler:
 
     def gnss_callback(self, gnss):
         gnss_dict = {}
-        gnss_dict["timestamp"].append(gnss.timestamp)
-        gnss_dict["latitude"].append(gnss.latitude)
-        gnss_dict["longitude"].append(gnss.longitude)
-        gnss_dict["altitude"].append(gnss.altitude)
+        gnss_dict["timestamp"] = gnss.timestamp
+        gnss_dict["latitude"] = gnss.latitude
+        gnss_dict["longitude"] = gnss.longitude
+        gnss_dict["altitude"] = gnss.altitude
         self.gnss_dataframe = self.gnss_dataframe.append(gnss_dict, ignore_index=True)
         self.gnss_dataframe.to_csv(os.path.join(self.save_dir, "gnss.csv"), index=False)
