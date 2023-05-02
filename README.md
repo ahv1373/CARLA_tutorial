@@ -13,6 +13,7 @@ A1-FAMILYNAME-STUDENTNUMBER
 Submit a pull request to the repository and make any changes you want in your own branch.
 Commit your changes and make sure to push them as well. The deadline to deliver the assignment is
 5-May-2023.
+
 Update: The deadline has been extended to 12-May-2023 (1 week) due to students' request.
 
 ## Assignment #2
