@@ -1,14 +1,21 @@
 import os
 
-import carla
 import cv2
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
+from matplotlib import cm
+import open3d as o3d
+import math
+import datetime
 
 
 class SimulatorHandler:
     def __init__(self, town_name):
+        self.raw_data = None
+        self.COOL = None
+        self.COOL_RANGE = None
+        self.viridis = None
         self.spawn_point = None
         self.vehicle = None
         self.rgb_cam_sensor = None
@@ -50,6 +57,66 @@ class SimulatorHandler:
     def set_weather(self, weather=carla.WeatherParameters.ClearNoon):
         self.world.set_weather(weather)
 
+    # Add LIDAR and RADAR, and collision sensors
+
+    def lidar(self):
+        lidar_sensor = self.blueprint_library.find("sensor.lidar.ray_cast")
+        # lidar_sensor.set_attribute("sensor_tick", str(0.0))
+        # lidar_sensor.set_attribute('range', '100.0')
+        # lidar_sensor.set_attribute('upper_fov', '15.0')
+        # lidar_sensor.set_attribute('lower_fov', '-25.0')
+        # lidar_sensor.set_attribute('channels', '64.0')
+        # lidar_sensor.set_attribute('rotation_frequency', '20.0')
+        # lidar_sensor.set_attribute('points_per_second', '500000')
+        with open('data/lidar.csv', 'a') as csvfile:
+            ww = np.array(["X", "Y", "Z"])
+            ww = np.reshape(ww, (1, 3))
+            np.savetxt(csvfile, ww, delimiter=',', fmt=['%s', '%s', '%s'], comments='')
+        self.viridis = np.array(cm.get_cmap('plasma').colors)
+        lidar_location = carla.Location(0, 0, 0)
+        lidar_rotation = carla.Rotation(0, 0, 0)
+        lidar_transform = carla.Transform(lidar_location, lidar_rotation)
+        lidar_sen = self.world.spawn_actor(lidar_sensor, lidar_transform, attach_to=self.vehicle,
+                                           attachment_type=carla.AttachmentType.Rigid)
+        self.actor_list.append(lidar_sen)
+        return lidar_sen
+
+    def radar(self):
+        radar_sensor = self.blueprint_library.find("sensor.other.radar")
+        radar_sensor.set_attribute('horizontal_fov', '30.0')
+        radar_sensor.set_attribute('vertical_fov', '30.0')
+        radar_sensor.set_attribute('points_per_second', '10000')
+        with open('data/radar.csv', 'a') as csvfile:
+            ww = np.array(["altitude", "azimuth", "depth", "velocity"])
+            ww = np.reshape(ww, (1, 4))
+            np.savetxt(csvfile, ww, delimiter=',', fmt=['%s', '%s', '%s', '%s'], comments='')
+        self.viridis = np.array(cm.get_cmap('plasma').colors)
+        # VID_RANGE = np.linspace(0.0, 1.0, self.viridis.shape[0])
+        self.COOL_RANGE = np.linspace(0.0, 1.0, self.viridis.shape[0])
+        self.COOL = np.array(cm.get_cmap('winter')(self.COOL_RANGE))
+        self.COOL = self.COOL[:, :3]
+        radar_location = carla.Location(0, 0, 0)
+        radar_rotation = carla.Rotation(0, 0, 0)
+        radar_transform = carla.Transform(radar_location, radar_rotation)
+        radar_sen = self.world.spawn_actor(radar_sensor, radar_transform, attach_to=self.vehicle,
+                                           attachment_type=carla.AttachmentType.Rigid)
+        self.actor_list.append(radar_sen)
+        return radar_sen
+
+    def collision(self):
+        collision_sensor = self.blueprint_library.find("sensor.other.collision")
+        with open('data/collision.csv', 'a') as csvfile:
+            ww = np.array(["time stamp", "situation"])
+            ww = np.reshape(ww, (1, 2))
+            np.savetxt(csvfile, ww, delimiter=',', fmt=['%s', '%s'], comments='')
+        collision_location = carla.Location(0, 0, 0)
+        collision_rotation = carla.Rotation(0, 0, 0)
+        collision_transform = carla.Transform(collision_location, collision_rotation)
+        collision_sen = self.world.spawn_actor(collision_sensor, collision_transform, attach_to=self.vehicle,
+                                               attachment_type=carla.AttachmentType.Rigid)
+        self.actor_list.append(collision_sen)
+        return collision_sen
+
     def rgb_cam(self):
         rgb_camera = self.blueprint_library.find("sensor.camera.rgb")
         rgb_camera.set_attribute("image_size_x", f"{self.IM_WIDTH}")
@@ -83,6 +150,8 @@ class SimulatorHandler:
                                          attachment_type=carla.AttachmentType.Rigid)
         self.actor_list.append(ego_imu)
         return ego_imu
+
+        # callbacks
 
     def rgb_cam_callback(self, image):
         image.save_to_disk("data/rgb_cam/%06d.jpg" % image.frame)
@@ -118,3 +187,71 @@ class SimulatorHandler:
         gnss_dict["altitude"] = gnss.altitude
         self.gnss_dataframe = self.gnss_dataframe.append(gnss_dict, ignore_index=True)
         self.gnss_dataframe.to_csv(os.path.join(self.save_dir, "gnss.csv"), index=False)
+
+    def lidar_callback(self, point_cloud, point_list):
+        data = np.copy(np.frombuffer(point_cloud.raw_data, dtype=np.dtype('f4')))
+        # print("#########", len(point_cloud.raw_data), "#########")
+        data = np.reshape(data, (int(data.shape[0] / 3), 3))
+
+        with open('data/lidar.csv', 'a') as csvfile:
+            np.savetxt(csvfile, data, delimiter=',', fmt=['%f', '%f', '%f'], comments='')
+
+        points = data
+
+        points[:, :1] = -points[:, :1]
+
+        point_list.points = o3d.utility.Vector3dVector(points)
+        # point_list.colors = o3d.utility.Vector3dVector(int_color)
+
+    def collision_callback(self, event):
+        # print("#######collision detected!#######")
+        #ar = np.array([str(datetime.datetime.now()), "collision detected!"])
+        ar = np.array([str(event.timestamp), "collision detected!"])
+        ar = np.reshape(ar, (1, 2))
+        with open('data/collision.csv', 'a') as csvfile:
+            np.savetxt(csvfile, ar, delimiter=',', fmt=['%s', '%s'], comments='')
+    def radar_callback(self, data, point_list):
+
+        mydata = np.frombuffer(data.raw_data, dtype=np.dtype('f4'))
+        mydata = np.reshape(mydata, (int(mydata.shape[0] / 4), 4))
+        with open('data/radar.csv', 'a') as csvfile:
+            np.savetxt(csvfile, mydata, delimiter=',', fmt=['%f', '%f', '%f', '%f'], comments='')
+
+        radar_data = np.zeros((len(data), 4))
+
+        for i, detection in enumerate(data):
+            x = detection.depth * math.cos(detection.altitude) * math.cos(detection.azimuth)
+            y = detection.depth * math.cos(detection.altitude) * math.sin(detection.azimuth)
+            z = detection.depth * math.sin(detection.altitude)
+
+            radar_data[i, :] = [x, y, z, detection.velocity]
+
+        intensity = np.abs(radar_data[:, -1])
+        intensity_col = 1.0 - np.log(intensity) / np.log(np.exp(-0.004 * 100))
+        int_color = np.c_[
+            np.interp(intensity_col, self.COOL_RANGE, self.COOL[:, 0]),
+            np.interp(intensity_col, self.COOL_RANGE, self.COOL[:, 1]),
+            np.interp(intensity_col, self.COOL_RANGE, self.COOL[:, 2])]
+
+        points = radar_data[:, :-1]
+        # points[:, :1] = -points[:, :1]
+        point_list.points = o3d.utility.Vector3dVector(points)
+        point_list.colors = o3d.utility.Vector3dVector(int_color)
+
+    def add_open3d_axis(self, ddd):
+        """Add a small 3D axis on Open3D Visualizer"""
+        axis = o3d.geometry.LineSet()
+        axis.points = o3d.utility.Vector3dVector(np.array([
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0]]))
+        axis.lines = o3d.utility.Vector2iVector(np.array([
+            [0, 1],
+            [0, 2],
+            [0, 3]]))
+        axis.colors = o3d.utility.Vector3dVector(np.array([
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0]]))
+        ddd.add_geometry(axis)
