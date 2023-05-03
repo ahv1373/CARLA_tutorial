@@ -18,13 +18,16 @@ if __name__ == "__main__":
     rgb_cam = simulator_handler.rgb_cam()
     gnss_sensor = simulator_handler.gnss()
     imu_sensor = simulator_handler.imu()
+    LIDAR_sensor = simulator_handler.LIDAR()
+    radar_sensor = simulator_handler.radar()
+    collision_sensor = simulator_handler.collision()
 
     # listen to sensor data
     rgb_cam.listen(lambda image: simulator_handler.rgb_cam_callback(image))
     imu_sensor.listen(lambda imu: simulator_handler.imu_callback(imu))
     gnss_sensor.listen(lambda gnss: simulator_handler.gnss_callback(gnss))
+    LIDAR_sensor.listen(lambda LIDAR: simulator_handler.LIDAR_callback(LIDAR))
+    radar_sensor.listen(lambda radar: simulator_handler.radar_callback(radar))
+    collision_sensor.listen(lambda collision: simulator_handler.collision_callback(collision))
     VehicleCommand(throttle=1.0).send_control(simulator_handler.vehicle)
-    time.sleep(20.0)
-
-
-
+    time.sleep(1000.0)
