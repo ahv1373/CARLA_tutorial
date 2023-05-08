@@ -14,6 +14,8 @@ Submit a pull request to the repository and make any changes you want in your ow
 Commit your changes and make sure to push them as well. The deadline to deliver the assignment is
 5-May-2023.
 
+Update: The deadline has been extended to 12-May-2023 (1 week) due to students' request.
+
 ## Assignment #2
 Task #1: Integrate what you have learned in session 1 and 2 by adding RGB camera, IMU, and LIDAR sensor
 to the vehicle and control it to follow the path by taking advantage of PID controller.
