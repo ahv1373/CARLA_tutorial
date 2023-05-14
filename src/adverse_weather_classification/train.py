@@ -128,6 +128,6 @@ class TrainCustomCNN(TrainHyperParameters):
 
 
 if __name__ == '__main__':
-    data_dir = '/home/ahv/PycharmProjects/Visual-Inertial-Odometry/simulation/CARLA/output/root_dir'
-    train_custom_cnn = TrainCustomCNN(data_dir)
+    data_dir_ = '/home/ahv/PycharmProjects/Visual-Inertial-Odometry/simulation/CARLA/output/root_dir'
+    train_custom_cnn = TrainCustomCNN(data_dir_)
     train_custom_cnn.exec()
