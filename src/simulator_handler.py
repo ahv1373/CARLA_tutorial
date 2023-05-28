@@ -1,9 +1,12 @@
 import os
-
+import sys
+sys.path.append("E:\Education\Ph.D\Semester 2\Courses\Machine "
+                "Learning\Carla_TA\CARLA_0.9.8\WindowsNoEditor\PythonAPI\carla\dist\carla-0.9.8-py3.7-win-amd64.egg")
 import carla
 import cv2
 import numpy as np
 import pandas as pd
+import math
 from matplotlib import pyplot as plt
 
 
@@ -32,14 +35,17 @@ class SimulatorHandler:
             self.blueprint_library = self.world.get_blueprint_library()
             self.actor_list = []
             self.vehicle_list = []
-            self.IM_WIDTH = 800  # Ideally a config file should be defined for such parameters
-            self.IM_HEIGHT = 600
+            self.IM_WIDTH = 1220  # Ideally a config file should be defined for such parameters
+            self.IM_HEIGHT = 710
             print("Successfully connected to CARLA client")
         except Exception as error:
             raise Exception(f"Error while initializing the simulator: {error}")
 
         self.imu_dataframe = pd.DataFrame({})
         self.gnss_dataframe = pd.DataFrame({})
+        self.Lidar_dataframe = pd.DataFrame({})
+        self.Radar_dataframe = pd.DataFrame({})
+        self.Collision_dataframe = pd.DataFrame({})
 
     def spawn_vehicle(self, spawn_index: int = 90):
         self.vehicle_blueprint = self.blueprint_library.filter("model3")[0]  # choosing the car
@@ -83,7 +89,41 @@ class SimulatorHandler:
                                          attachment_type=carla.AttachmentType.Rigid)
         self.actor_list.append(ego_imu)
         return ego_imu
+    def LIDAR_sensor(self):
+        lidar_sensor = self.blueprint_library.find("sensor.lidar.ray_cast")
+        lidar_sensor.set_attribute("channels", "25")
+        lidar_sensor.set_attribute("range", "8")
+        lidar_sensor.set_attribute("points_per_second", "20000")
+        lidar_sensor.set_attribute('sensor_tick', '0.0')
+        spawn_point_Lidar = carla.Transform(carla.Location(x=0.0, y=0.0, z=0.0),
+                                            carla.Rotation(pitch=0, roll=0, yaw=0))
 
+        self.lidar_Sensor = self.world.spawn_actor(lidar_sensor, spawn_point_Lidar, attach_to=self.vehicle)
+        self.actor_list.append(self.lidar_Sensor)
+        return self.lidar_Sensor
+
+    def RADAR_sensor(self):
+        Radar_sensor = self.blueprint_library.find("sensor.other.radar")
+        Radar_sensor.set_attribute("horizontal_fov", "35.0")
+        Radar_sensor.set_attribute("points_per_second", "1000")
+        Radar_sensor.set_attribute("range", "90.0")
+        Radar_sensor.set_attribute('sensor_tick', '0.0')
+        Radar_sensor.set_attribute('vertical_fov', '30.0')
+        spawn_point_Radar = carla.Transform(carla.Location(x=3.5, y=0, z=0.7),
+                                            carla.Rotation(pitch=-5, roll=0, yaw=0))
+
+        self.Radar_Sensor = self.world.spawn_actor(Radar_sensor, spawn_point_Radar, attach_to=self.vehicle)
+        self.actor_list.append(self.Radar_Sensor)
+        return self.Radar_Sensor
+
+    def COLLISION_sensor(self):
+        Collision_sensor = self.blueprint_library.find("sensor.other.radar")
+        spawn_point_Collision = carla.Transform(carla.Location(x=0, y=0, z=0),
+                                                carla.Rotation(pitch=0, roll=0, yaw=0))
+
+        self.Collision_Sensor = self.world.spawn_actor(Collision_sensor, spawn_point_Collision, attach_to=self.vehicle)
+        self.actor_list.append(self.Collision_Sensor)
+        return self.Collision_Sensor
     def rgb_cam_callback(self, image):
         image.save_to_disk("data/rgb_cam/%06d.jpg" % image.frame)
         raw_image = np.array(image.raw_data)
@@ -118,3 +158,35 @@ class SimulatorHandler:
         gnss_dict["altitude"] = gnss.altitude
         self.gnss_dataframe = self.gnss_dataframe.append(gnss_dict, ignore_index=True)
         self.gnss_dataframe.to_csv(os.path.join(self.save_dir, "gnss.csv"), index=False)
+    def LIDAR_callback(self, Lidar):
+        Lidar_dict = {}
+        Lidar_dict["timestamp"] = Lidar.timestamp
+        Lidar_dict["transform"] = Lidar.transform
+        Lidar_dict["horizontal_angle"] = Lidar.horizontal_angle
+        Lidar_dict["channels"] = Lidar.channels
+        Lidar_dict["raw_data"] = Lidar.raw_data
+        self.Lidar_dataframe = self.Lidar_dataframe.append(Lidar_dict, ignore_index=True)
+        self.Lidar_dataframe.to_csv(os.path.join(self.save_dir, "Lidar.csv"), index=False)
+
+    def RADAR_callback(self, Radar):
+        Radar_dict = {}
+        Radar_dict["raw_data"] = Radar.raw_data
+
+        self.Radar_dataframe = self.Radar_dataframe.append(Radar_dict, ignore_index=True)
+        self.Radar_dataframe.to_csv(os.path.join(self.save_dir, "Radar.csv"), index=False)
+
+    def COLLISION_callback(self, Collision):
+        Collision_dict = {}
+        Collision_dict["timestamp"] = Collision.timestamp
+        Collision_dict["transform"] = Collision.transform
+        Collision_dict["actor"] = Collision.actor
+        Collision_dict["other_actor"] = Collision.other_actor
+        Collision_dict["normal_impulse"] = Collision.normal_impulse
+        self.Collision_dataframe = self.Collision_dataframe.append(Collision_dict, ignore_index=True)
+        self.Collision_dataframe.to_csv(os.path.join(self.save_dir, "Collision.csv"), index=False)
+
+    def clearing(self):
+        for actor in self.world.get_actors().filter('*vehicle*'):
+            actor.destroy()
+        for actor in self.world.get_actors().filter('*sensor*'):
+            actor.destroy()
