@@ -1,6 +1,6 @@
 import time
 
-import carla
+import carla846962
 
 from src.simulator_handler import SimulatorHandler
 from utils.vehicle_command import VehicleCommand
