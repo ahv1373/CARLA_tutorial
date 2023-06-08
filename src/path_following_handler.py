@@ -11,6 +11,7 @@ from src.utils.carla_utils import draw_waypoints, filter_waypoints, TrajectoryTo
 from src.utils.controller import VehiclePIDController
 
 
+
 class PathFollowingHandler(InfiniteLoopThread, ABC):
     def __init__(self, client: carla.Client, debug_mode: bool = False,
                  trajectory_index: int = 0) -> None:
@@ -26,6 +27,7 @@ class PathFollowingHandler(InfiniteLoopThread, ABC):
             {'road_id': road_id_list, 'filtered_points_index': filtered_point_index_list}
 
         self.world: World = self.client.get_world()
+        self.spectator = self.world.get_spectator()
         if os.path.basename(self.world.get_map().name) != carla_map:
             self.world: World = client.load_world(carla_map)
         self.waypoints: list = self.client.get_world().get_map().generate_waypoints(distance=1.0)
@@ -34,15 +36,15 @@ class PathFollowingHandler(InfiniteLoopThread, ABC):
             self.waypoints_to_visualize = {'road_id': [4], 'filtered_points_index': [0]}
         self.pid_values_lateral: Union[Dict[str, float], Dict[str, float], Dict[str, float]] = \
             {'K_P': 1,
-             'K_D': 0.07,
-             'K_I': 0.05}  # control steering
+             'K_D': 0.08,
+             'K_I': 0.05}
         self.pid_values_longitudinal: Union[Dict[str, float], Dict[str, float], Dict[str, float]] = \
-            {'K_P': 1,
-             'K_D': 0.07,
-             'K_I': 0.05}  # control speed
+            {'K_P': 1.5,
+             'K_D': 0.08,
+             'K_I': 0.07}
         self.vehicle_to_target_distance_threshold: float = 2.5
 
-        self.desired_speed: int = 20  # meter per second
+        self.desired_speed: int = 20
         self.reached_destination: bool = False
         self.previous_waypoint: Union[carla.Waypoint, None] = None
 
@@ -65,7 +67,7 @@ class PathFollowingHandler(InfiniteLoopThread, ABC):
                 vehicle.apply_control(control_signal)
 
     def visualize_road_id(self, road_id: int, filtered_points_index: int, life_time: int = 5) -> None:
-        # For debugging purposes.
+
         filtered_waypoints = filter_waypoints(self.waypoints, road_id=road_id)
         draw_waypoints(self.world, self.waypoints, road_id=road_id, life_time=life_time)
         target_waypoint = filtered_waypoints[filtered_points_index]
@@ -93,6 +95,7 @@ class PathFollowingHandler(InfiniteLoopThread, ABC):
         return ego_pid_controller_
 
     def follow_trajectory(self, vehicle: Any, ego_pid_controller_: VehiclePIDController) -> None:
+
         for trajectory_point_index in range(len(self.trajectory_to_follow['road_id'])):
             current_road_id, current_filtered_point_index = \
                 self.trajectory_to_follow['road_id'][trajectory_point_index], \
@@ -102,10 +105,10 @@ class PathFollowingHandler(InfiniteLoopThread, ABC):
                                                   len(self.trajectory_to_follow['road_id']) - 1))
             print('current_road_id: {}, current_filtered_point_index: {}'.format(current_road_id,
                                                                                  current_filtered_point_index))
-            if current_road_id == 1000:  # 1000 means using waypoint.next
+            if current_road_id == 1000:
                 target_waypoint = self.previous_waypoint.next(float(
                     current_filtered_point_index))[0]
-            elif current_road_id == 2000:  # 2000 means using waypoint.next_until_lane_end
+            elif current_road_id == 2000:
                 target_waypoints: List[carla.Waypoint] = self.previous_waypoint.next_until_lane_end(float(
                     current_filtered_point_index))
                 for target_waypoint in target_waypoints:
@@ -116,6 +119,20 @@ class PathFollowingHandler(InfiniteLoopThread, ABC):
                 target_waypoint = filtered_waypoints[current_filtered_point_index]
             self.__follow_target_waypoints__(vehicle, target_waypoint, ego_pid_controller_)
             self.previous_waypoint = target_waypoint
+
+    def infinite_trajectory_tracking(self, vehicle, ego_pid_controller_):
+        curr_waypoint_index = {'road_id': 13, 'filtered_points_index': 0}
+        curr_waypoint = filter_waypoints(self.waypoints,
+                                         road_id=curr_waypoint_index['road_id'])[curr_waypoint_index['filtered_points_index']]
+        print(curr_waypoint)
+        while True:
+            way_points = curr_waypoint.next_until_lane_end(2)
+            draw_waypoints(self.world, self.waypoints, road_id=curr_waypoint.road_id , life_time=30)
+            for target_waypoint in way_points:
+                self.__follow_target_waypoints__(vehicle, target_waypoint, ego_pid_controller_)
+            curr_waypoint = target_waypoint.next(3.5)[0]
+
+
 
     def vehicle_and_controller_inputs(self, ego_vehicle_, ego_pid_controller_):
         self.ego_vehicle = ego_vehicle_
@@ -128,9 +145,9 @@ class PathFollowingHandler(InfiniteLoopThread, ABC):
             sys.exit(1)
 
         if not self.reached_destination:
-            self.follow_trajectory(self.ego_vehicle, self.ego_pid_controller)
-            self.reached_destination = True
-            print("Destination has been reached.")
+
+            self.infinite_trajectory_tracking(self.ego_vehicle, self.ego_pid_controller)
+
         else:
             sys.exit(1)
 
