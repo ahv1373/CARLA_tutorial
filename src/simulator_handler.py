@@ -1,5 +1,8 @@
 import os
 import sys
+from src.path_following_handler import PathFollowingHandler
+from src.utils.carla_utils import draw_waypoints, filter_waypoints, TrajectoryToFollow, InfiniteLoopThread
+from typing import Any, Union, Dict, List
 import carla
 import cv2
 import numpy as np
@@ -8,7 +11,7 @@ from matplotlib import pyplot as plt
 import datetime
 import glob
 
-class SimulatorHandler:
+class SimulatorHandler():
     def __init__(self, town_name):
         self.spawn_point = None
         self.vehicle = None
@@ -24,9 +27,9 @@ class SimulatorHandler:
 
         try:
             print("Trying to communicate with the client...")
-            client = carla.Client("localhost", 2000)
-            client.set_timeout(8.0)
-            self.world = client.get_world()
+            self.client = carla.Client("localhost", 2000)
+            self.client.set_timeout(8.0)
+            self.world = self.client.get_world()
             if os.path.basename(self.world.get_map().name) != town_name:
                 self.world: carla.World = client.load_world(town_name)
 
@@ -44,17 +47,24 @@ class SimulatorHandler:
         self.LIDAR_dataframe = pd.DataFrame({})
         self.radar_dataframe = pd.DataFrame({})
         self.collision_dataframe = pd.DataFrame({})
+        self.waypoints: list = self.client.get_world().get_map().generate_waypoints(distance=1.0)
 
         for actor in self.world.get_actors().filter('*vehicle*'):
             actor.destroy()
         for actor in self.world.get_actors().filter('*sensor*'):
             actor.destroy()
 
-    def spawn_vehicle(self, spawn_index: int = 90):
-        self.vehicle_blueprint = self.blueprint_library.filter("model3")[0]  # choosing the car
-        self.spawn_point = self.world.get_map().get_spawn_points()[spawn_index]
-        self.vehicle = self.world.spawn_actor(self.vehicle_blueprint, self.spawn_point)
+    def spawn_ego_vehicles(self, road_id: int, filtered_points_index: int) -> Any:
+        print("spawning ego vehicle at road_id={} filtered_points_index={}".format(road_id,
+                                                                                   filtered_points_index))
+        vehicle_blueprint = \
+            self.client.get_world().get_blueprint_library().filter("model3")[0]
+        filtered_waypoints = filter_waypoints(self.waypoints, road_id=road_id)
+        spawn_point = filtered_waypoints[filtered_points_index].transform
+        spawn_point.location.z += 2
+        self.vehicle = self.client.get_world().spawn_actor(vehicle_blueprint, spawn_point)
         self.actor_list.append(self.vehicle)
+        return self.vehicle
 
     def set_weather(self, weather=carla.WeatherParameters.ClearNoon):
         self.world.set_weather(weather)
@@ -152,7 +162,7 @@ class SimulatorHandler:
         # create a pandas dataframe
         self.imu_dataframe = self.imu_dataframe.append(imu_dict, ignore_index=True)
         # save the dataframe to a csv file
-        self.imu_dataframe.to_csv(os.path.join(self.save_dir, "imu.csv"), index=False)
+        self.imu_dataframe.to_csv(os.path.join(self.save_dir, "imu.csv"), index=False, mode='a')
     def collision_callback(self, collision):
         collision_dict = {}
         collision_dict["Collision Time"] = collision.timestamp
@@ -180,6 +190,7 @@ class SimulatorHandler:
         df = pd.DataFrame(points, columns=["altitude","azimuth","depth","velocity"])
         self.radar_dataframe = self.radar_dataframe.append(df, ignore_index=True)
         self.radar_dataframe.to_csv(os.path.join(self.save_dir, "radar.csv"), index=False)
+        
     def gnss_callback(self, gnss):
         gnss_dict = {}
         gnss_dict["timestamp"] = gnss.timestamp
@@ -187,4 +198,12 @@ class SimulatorHandler:
         gnss_dict["longitude"] = gnss.longitude
         gnss_dict["altitude"] = gnss.altitude
         self.gnss_dataframe = self.gnss_dataframe.append(gnss_dict, ignore_index=True)
-        self.gnss_dataframe.to_csv(os.path.join(self.save_dir, "gnss.csv"), index=False)
+        self.gnss_dataframe.to_csv(os.path.join(self.save_dir, "gnss.csv"), index=False, mode='a')
+
+    def clearing(self):
+        for actor in self.world.get_actors().filter('*vehicle*'):
+            actor.destroy()
+        for actor in self.world.get_actors().filter('*sensor*'):
+            actor.destroy()
+            
+    
