@@ -25,6 +25,7 @@ if __name__ == '__main__':
         path_following_handler.vehicle_and_controller_inputs(ego_vehicle, ego_pid_controller)
         path_following_handler.start()
 
+
     # add sensors
     rgb_cam = simulator_handler.rgb_cam()
     gnss_sensor = simulator_handler.gnss()

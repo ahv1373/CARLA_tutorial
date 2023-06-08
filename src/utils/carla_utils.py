@@ -27,19 +27,11 @@ class TrajectoryToFollow:
 
     def get_trajectory_data(self) -> Tuple[Any, list, list]:
         if self.trajectory_index == 0:
-            inf = 1
-            while True:
-             inf = inf +10000
-             print('inf=',inf)
              carla_map = "Town10HD_Opt"
              road = [13, 12, 12, 11, 11, 1, 1, 1, 1, 1, 1, 4, 4, 13]
-             road_id_list: list = road*inf
+             road_id_list: list = road
              filtered = [-4, -1, 1, -1, 5, -1, -17, -45, -153, -201, 3, 0, -4, 0]
-             filtered_point_index_list: list = filtered*inf
-             break
-
-
-
+             filtered_point_index_list: list = filtered
 
 
         elif self.trajectory_index == 1:

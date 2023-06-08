@@ -93,6 +93,7 @@ class PathFollowingHandler(InfiniteLoopThread, ABC):
         return ego_pid_controller_
 
     def follow_trajectory(self, vehicle: Any, ego_pid_controller_: VehiclePIDController) -> None:
+      while True:
         for trajectory_point_index in range(len(self.trajectory_to_follow['road_id'])):
             current_road_id, current_filtered_point_index = \
                 self.trajectory_to_follow['road_id'][trajectory_point_index], \
