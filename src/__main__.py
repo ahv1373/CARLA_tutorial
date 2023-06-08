@@ -3,15 +3,27 @@ import cv2
 import time
 import carla
 
-
 from src.simulator_handler import SimulatorHandler
 from utils1.vehicle_command import VehicleCommand
+from src.path_following_handler import PathFollowingHandler
 
-if __name__ == "__main__":
-    simulator_handler = SimulatorHandler(town_name="Town04")
-    simulator_handler.spawn_vehicle(spawn_index=25)
-    simulator_handler.set_weather(weather=carla.WeatherParameters.ClearNoon)
-
+if __name__ == '__main__':
+    simulator_handler = SimulatorHandler(town_name="Town10HD_Opt")
+    client_ = carla.Client("localhost", 2000)
+    client_.set_timeout(10.0)
+    path_following_handler = PathFollowingHandler(client=client_, debug_mode=False)
+    ego_spawn_point = path_following_handler.ego_spawn_point
+    if path_following_handler.debug_mode:
+        path_following_handler.start()
+    else:
+        ego_vehicle = \
+            path_following_handler.spawn_ego_vehicles(road_id=ego_spawn_point["road_id"],
+                                                      filtered_points_index=ego_spawn_point["filtered_points_index"])
+        ego_pid_controller = path_following_handler.pid_controller(ego_vehicle,
+                                                                   path_following_handler.pid_values_lateral,
+                                                                   path_following_handler.pid_values_longitudinal)
+        path_following_handler.vehicle_and_controller_inputs(ego_vehicle, ego_pid_controller)
+        path_following_handler.start()
 
     # add sensors
     rgb_cam = simulator_handler.rgb_cam()
@@ -57,10 +69,9 @@ if __name__ == "__main__":
         vis.poll_events()
         vis.update_renderer()
 
-        time.sleep(0.005)
+        time.sleep(0.1)
         frame += 1
 
         # Break if user presses 'q'
         if cv2.waitKey(1) == ord('q'):
             break
-

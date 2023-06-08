@@ -3,7 +3,7 @@ from typing import Tuple, Any, Dict, Union
 
 import carla
 
-
+num=10
 def draw_waypoints(world_, waypoints_, road_id=None, life_time=50.0):
     for waypoint in waypoints_:
 
@@ -27,12 +27,24 @@ class TrajectoryToFollow:
 
     def get_trajectory_data(self) -> Tuple[Any, list, list]:
         if self.trajectory_index == 0:
-            carla_map = "Town10HD_Opt"
-            road_id_list: list = [13, 12, 12, 11, 2, 10]
-            filtered_point_index_list: list = [-4, -1, 11, 1, 0, 0]
+            inf = 1
+            while True:
+             inf = inf +10000
+             print('inf=',inf)
+             carla_map = "Town10HD_Opt"
+             road = [13, 12, 12, 11, 11, 1, 1, 1, 1, 1, 1, 4, 4, 13]
+             road_id_list: list = road*inf
+             filtered = [-4, -1, 1, -1, 5, -1, -17, -45, -153, -201, 3, 0, -4, 0]
+             filtered_point_index_list: list = filtered*inf
+             break
+
+
+
+
+
         elif self.trajectory_index == 1:
             carla_map = "Town10HD_Opt"
-            road_id_list: list = [1, 2000, 1, 2, 1000, 21, 20, 20, 1000, 15, 22, 6, 2000]
+            road_id_list: list = [1, 1000, 1, 2, 1000, 21, 20, 20, 1000, 15, 22, 6, 2000]
             filtered_point_index_list: list = [-300, 1, -4, -4, 25, -1, -1, 3, 10, 0, 3, -1, 1]
         else:
             raise NotImplementedError('A trajectory with index {} has not been implemented.'

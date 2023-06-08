@@ -8,6 +8,7 @@ from matplotlib import cm
 import open3d as o3d
 import math
 
+
 class SimulatorHandler:
     def __init__(self, town_name):
         self.raw_data = None
@@ -114,7 +115,7 @@ class SimulatorHandler:
         self.actor_list.append(collision_sen)
         return collision_sen
 
-    def rgb_cam(self):
+    def rgb_cam(self) -> object:
         rgb_camera = self.blueprint_library.find("sensor.camera.rgb")
         rgb_camera.set_attribute("image_size_x", f"{self.IM_WIDTH}")
         rgb_camera.set_attribute("image_size_y", f"{self.IM_HEIGHT}")
@@ -160,7 +161,6 @@ class SimulatorHandler:
         plt.imshow(rgb_image)
         plt.show()
 
-
     def imu_callback(self, imu):
         imu_dict = {}
         imu_dict["timestamp"] = imu.timestamp
@@ -201,6 +201,7 @@ class SimulatorHandler:
         ar = np.reshape(ar, (1, 2))
         with open('data/collision.csv', 'a') as csvfile:
             np.savetxt(csvfile, ar, delimiter=',', fmt=['%s', '%s'], comments='')
+
     def radar_callback(self, data, point_list):
 
         mydata = np.frombuffer(data.raw_data, dtype=np.dtype('f4'))

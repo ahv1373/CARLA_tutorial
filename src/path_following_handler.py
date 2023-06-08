@@ -42,7 +42,7 @@ class PathFollowingHandler(InfiniteLoopThread, ABC):
              'K_I': 0.05}  # control speed
         self.vehicle_to_target_distance_threshold: float = 2.5
 
-        self.desired_speed: int = 20  # meter per second
+        self.desired_speed: int = 60# meter per second
         self.reached_destination: bool = False
         self.previous_waypoint: Union[carla.Waypoint, None] = None
 
@@ -155,3 +155,4 @@ if __name__ == '__main__':
                                                                    path_following_handler.pid_values_longitudinal)
         path_following_handler.vehicle_and_controller_inputs(ego_vehicle, ego_pid_controller)
         path_following_handler.start()
+
