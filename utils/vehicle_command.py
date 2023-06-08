@@ -1,3 +1,6 @@
+import sys
+sys.path.append(r"D:\CARLA_0.9.8_2\WindowsNoEditor\PythonAPI\carla\dist\carla-0.9.8-py3.7-win-amd64.egg")
+
 import carla
 import numpy as np
 
