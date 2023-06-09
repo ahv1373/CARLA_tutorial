@@ -73,6 +73,7 @@ if __name__ == '__main__':
         time.sleep(0.1)
         frame += 1
 
+
         # Break if user presses 'q'
         if cv2.waitKey(1) == ord('q'):
             break
