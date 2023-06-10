@@ -1,13 +1,17 @@
 import os
-
+#A2-Pooriya Sanaie(401624033)-Fateme Aghabarari(401622503)-Seyed Javad Hosseini
 import carla
 import cv2
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
+import math
+from utils.vehicle_command import VehicleCommand
+import time
 
 
 class SimulatorHandler:
+
     def __init__(self, town_name):
         self.spawn_point = None
         self.vehicle = None
@@ -28,12 +32,14 @@ class SimulatorHandler:
             self.world = client.get_world()
             if os.path.basename(self.world.get_map().name) != town_name:
                 self.world: carla.World = client.load_world(town_name)
+                global world2
+                world2 = self.world
 
             self.blueprint_library = self.world.get_blueprint_library()
             self.actor_list = []
             self.vehicle_list = []
-            self.IM_WIDTH = 800  # Ideally a config file should be defined for such parameters
-            self.IM_HEIGHT = 600
+            self.IM_WIDTH = 1024  # Ideally a config file should be defined for such parameters
+            self.IM_HEIGHT = 720
             print("Successfully connected to CARLA client")
         except Exception as error:
             raise Exception(f"Error while initializing the simulator: {error}")
@@ -46,6 +52,8 @@ class SimulatorHandler:
         self.spawn_point = self.world.get_map().get_spawn_points()[spawn_index]
         self.vehicle = self.world.spawn_actor(self.vehicle_blueprint, self.spawn_point)
         self.actor_list.append(self.vehicle)
+        global vehicle2
+        vehicle2 = self.vehicle
 
     def set_weather(self, weather=carla.WeatherParameters.ClearNoon):
         self.world.set_weather(weather)
@@ -118,3 +126,79 @@ class SimulatorHandler:
         gnss_dict["altitude"] = gnss.altitude
         self.gnss_dataframe = self.gnss_dataframe.append(gnss_dict, ignore_index=True)
         self.gnss_dataframe.to_csv(os.path.join(self.save_dir, "gnss.csv"), index=False)
+
+    def lidar(self):
+        lidar_cam = None
+        lidar_bp = self.world.get_blueprint_library().find('sensor.lidar.ray_cast')
+        lidar_bp.set_attribute('channels', str(32))
+        lidar_bp.set_attribute('points_per_second', str(90000))
+        lidar_bp.set_attribute('rotation_frequency', str(40))
+        lidar_bp.set_attribute('range', str(20))
+        lidar_location = carla.Location(0, 0, 2)
+        lidar_rotation = carla.Rotation(0, 0, 0)
+        lidar_transform = carla.Transform(lidar_location, lidar_rotation)
+        lidar_sen = self.world.spawn_actor(lidar_bp, lidar_transform, attach_to=self.vehicle,
+                                           attachment_type=carla.AttachmentType.Rigid)
+        return lidar_sen
+
+    def radar(self):
+        rad_cam = None
+        rad_bp = self.world.get_blueprint_library().find('sensor.other.radar')
+        rad_bp.set_attribute('horizontal_fov', str(35))
+        rad_bp.set_attribute('vertical_fov', str(20))
+        rad_bp.set_attribute('range', str(20))
+        rad_location = carla.Location(x=2.0, z=1.0)
+        rad_rotation = carla.Rotation(pitch=5)
+        rad_transform = carla.Transform(rad_location, rad_rotation)
+        rad_ego = self.world.spawn_actor(rad_bp, rad_transform, attach_to=self.vehicle,
+                                         attachment_type=carla.AttachmentType.Rigid)
+        return rad_ego
+
+    def rad_callback(self, radar_data):
+        velocity_range = 7.5  # m/s
+        current_rot = radar_data.transform.rotation
+        for detect in radar_data:
+            azi = math.degrees(detect.azimuth)
+            alt = math.degrees(detect.altitude)
+            # The 0.25 adjusts a bit the distance so the dots can
+            # be properly seen
+            fw_vec = carla.Vector3D(x=detect.depth - 0.25)
+            carla.Transform(
+                carla.Location(),
+                carla.Rotation(
+                    pitch=current_rot.pitch + alt,
+                    yaw=current_rot.yaw + azi,
+                    roll=current_rot.roll)).transform(fw_vec)
+
+            def clamp(min_v, max_v, value):
+                return max(min_v, min(value, max_v))
+
+            norm_velocity = detect.velocity / velocity_range  # range [-1, 1]
+            r = int(clamp(0.0, 1.0, 1.0 - norm_velocity) * 255.0)
+            g = int(clamp(0.0, 1.0, 1.0 - abs(norm_velocity)) * 255.0)
+            b = int(abs(clamp(- 1.0, 0.0, - 1.0 - norm_velocity)) * 255.0)
+            self.world.debug.draw_point(
+                radar_data.transform.location + fw_vec,
+                size=0.075,
+                life_time=0.06,
+                persistent_lines=False,
+                color=carla.Color(r, g, b))
+        # radar_dict = {}
+        # radar_dict["timestamp"] = radar_data.timestamp
+        # radar_dict["altitude"] = radar_data.altitude
+        # radar_dict["azimuth"] = radar_data.azimuth
+        # radar_dict["depth"] = radar_data.depth
+
+    # radar_dict["velocity"] = radar_data.velocity
+    # self.gnss_dataframe = self.gnss_dataframe.append(radar_dict, ignore_index=True)
+    # self.gnss_dataframe.to_csv(os.path.join(self.save_dir, "radar.csv"), index=False)
+    def colision(self):
+        blueprint_library = self.world.get_blueprint_library()
+
+        collision_sensor = self.world.spawn_actor(blueprint_library.find('sensor.other.collision'),
+                                                  carla.Transform(), attach_to=self.vehicle,
+                                                  attachment_type=carla.AttachmentType.Rigid)
+        return collision_sensor
+
+    def colision_callback(event):
+        print("COLLISION")
