@@ -2,8 +2,9 @@
 #
 # This work is licensed under the terms of the MIT license.
 # For a copy, see <https://opensource.org/licenses/MIT>.
-
+import sys
 """ This module contains PID controllers to perform lateral and longitudinal control. """
+sys.path.append(r"D:\CARLA_0.9.8_2\WindowsNoEditor\PythonAPI\carla\dist\carla-0.9.8-py3.7-win-amd64.egg")
 
 from collections import deque
 import math
@@ -170,7 +171,7 @@ class PIDLongitudinalController():
 
         return np.clip((self._k_p * error) + (self._k_d * _de) + (self._k_i * _ie), -1.0, 1.0)
 
-    def change_parameters(self, K_P, K_I, K_D, dt):
+    def change_parameters(self, K_P, K_I, K_D, dt=0.03):
         """Changes the PID parameters"""
         self._k_p = K_P
         self._k_i = K_I
@@ -261,7 +262,7 @@ class PIDLateralController():
 
         return np.clip((self._k_p * _dot) + (self._k_d * _de) + (self._k_i * _ie), -1.0, 1.0)
 
-    def change_parameters(self, K_P, K_I, K_D, dt):
+    def change_parameters(self, K_P, K_I, K_D, dt=0.03):
         """Changes the PID parameters"""
         self._k_p = K_P
         self._k_i = K_I
