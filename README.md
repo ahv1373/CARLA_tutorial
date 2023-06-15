@@ -14,7 +14,7 @@ Submit a pull request to the repository and make any changes you want in your ow
 Commit your changes and make sure to push them as well. The deadline to deliver the assignment is
 5-May-2023.
 
-Update: The deadline has been extended to 12-May-2023 (1 week) due to students' request.
+Update: The deadline has been extended to 29-May-2023.
 
 ## Assignment #2
 Task #1: Integrate what you have learned in session 1 and 2 by adding RGB camera, IMU, and LIDAR sensor
@@ -37,5 +37,13 @@ and create new branch. The branch name should be:
 A2-FAMILYNAME-STUDENTNUMBER
 ```
 
-The deadline to deliver the assignment is
-20-May-2023.
+The deadline to deliver the assignment is 10-June-2023.
+
+## Assignment #3
+Generate an image dataset from the CARLA simulator containing samples from different weather conditions including day,
+night, rain, and fog. Train a deep convolutional neural network to classify the images based on the weather conditions.
+
+Evaluate the trained model on the test set utilizing relevant criteria in the classification task
+and form the confusion matrix.
+
+The due date is 20-June-2023.
