@@ -1,6 +1,5 @@
 import os
 from typing import Tuple
-
 import matplotlib
 import numpy as np
 import tensorflow as tf
@@ -9,7 +8,6 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.callbacks import ModelCheckpoint
 from mock import Mock
 import matplotlib.pyplot as plt
-
 
 class TrainHyperParameters:
     def __init__(self, input_shape: Tuple[int, int, int] = (256, 256, 3), number_of_classes: int = 2,
