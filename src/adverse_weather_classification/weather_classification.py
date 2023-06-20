@@ -12,7 +12,7 @@ class AdverseWeatherClassifier:
         self.model = None
         self.model_path = model_path
         self.model_input_size = model_input_size
-        self.class_labels = ['day', 'night']
+        self.class_labels = ['ClearNoon', 'ClearSunset','fog','HardRainSunset']
 
     def load(self):
         start_time = time.time()
@@ -40,8 +40,8 @@ class AdverseWeatherClassifier:
 
 
 if __name__ == "__main__":
-    img_dir = "/home/ahv/PycharmProjects/Visual-Inertial-Odometry/simulation/CARLA/output/root_dir/testing_imgs"
-    model_path_ = "/src/adverse_weather_classification/output/checkpoints/best_model.h5"
+    img_dir = r"D:\Set\TestFinal"
+    model_path_ = r"D:\output\checkpoints\best_model.h5"
     adverse_weather_classifier = AdverseWeatherClassifier(model_path_)
     adverse_weather_classifier.load()
     for root, dirs, files in os.walk(img_dir):
