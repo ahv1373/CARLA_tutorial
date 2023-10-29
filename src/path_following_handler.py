@@ -1,21 +1,25 @@
 import math
 import os
-import sys
-from abc import ABC
-from typing import Any, Union, Dict, List
+import time
+from typing import Any, Union, Dict, List, Optional
 
 import carla
+import matplotlib
 from carla import World
+from matplotlib import pyplot as plt
+from matplotlib.animation import FuncAnimation
 
-from src.utils.carla_utils import draw_waypoints, filter_waypoints, TrajectoryToFollow, InfiniteLoopThread
+from src.utils.carla_utils import draw_waypoints, filter_waypoints, TrajectoryToFollow, PIDControllerProperties
 from src.utils.controller import VehiclePIDController
 
+matplotlib.interactive(True)
 
-class PathFollowingHandler(InfiniteLoopThread, ABC):
-    def __init__(self, client: carla.Client, debug_mode: bool = False,
-                 trajectory_index: int = 0) -> None:
-        super(PathFollowingHandler, self).__init__(name="CARLA trajectory following handler")
+
+class PathFollowingHandler:
+    def __init__(self, client: carla.Client, trajectory_index: int = 0, **kwargs) -> None:
+        # desired speed is in m/s
         self.trajectory_to_follow_handler = TrajectoryToFollow(trajectory_index=trajectory_index)
+        self.actor_list = []
         self.ego_vehicle = None
         self.ego_pid_controller = None
         carla_map, road_id_list, filtered_point_index_list = self.trajectory_to_follow_handler.get_trajectory_data()
@@ -29,22 +33,55 @@ class PathFollowingHandler(InfiniteLoopThread, ABC):
         if os.path.basename(self.world.get_map().name) != carla_map:
             self.world: World = client.load_world(carla_map)
         self.waypoints: list = self.client.get_world().get_map().generate_waypoints(distance=1.0)
-        self.debug_mode = debug_mode
-        if self.debug_mode:
-            self.waypoints_to_visualize = {'road_id': [4], 'filtered_points_index': [0]}
-        self.pid_values_lateral: Union[Dict[str, float], Dict[str, float], Dict[str, float]] = \
-            {'K_P': 1,
-             'K_D': 0.07,
-             'K_I': 0.05}  # control steering
-        self.pid_values_longitudinal: Union[Dict[str, float], Dict[str, float], Dict[str, float]] = \
-            {'K_P': 1,
-             'K_D': 0.07,
-             'K_I': 0.05}  # control speed
-        self.vehicle_to_target_distance_threshold: float = 2.5
 
-        self.desired_speed: int = 20  # meter per second
+        self.lateral_pid_props, self.longitudinal_pid_props = PIDControllerProperties(), PIDControllerProperties()
+        self.lateral_pid_props.set_pid_gains(k_p=1.0, k_i=0.05, k_d=0.07)
+        self.longitudinal_pid_props.set_pid_gains(k_p=1.0, k_i=0.05, k_d=0.07)
+
+        self.pid_values_lateral: Union[Dict[str, float], Dict[str, float], Dict[str, float]] = \
+            {'K_P': self.lateral_pid_props.k_p,
+             'K_D': self.lateral_pid_props.k_d,
+             'K_I': self.lateral_pid_props.k_i}
+        self.pid_values_longitudinal: Union[Dict[str, float], Dict[str, float], Dict[str, float]] = \
+            {'K_P': self.longitudinal_pid_props.k_p,
+             'K_D': self.longitudinal_pid_props.k_d,
+             'K_I': self.longitudinal_pid_props.k_i}
+
+        # Receive keyword arguments
+        self.vehicle_to_target_distance_threshold: float = kwargs.get('vehicle_to_target_distance_threshold', 2.5)
+        self.desired_speed: float = kwargs.get('desired_speed', 20.0)
+
         self.reached_destination: bool = False
-        self.previous_waypoint: Union[carla.Waypoint, None] = None
+        self.previous_waypoint: Optional[carla.Waypoint] = None
+
+        # initialize live plotting
+        fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
+        self.axes_list = [ax[0], ax[1]]
+        ax[0].set_title('Throttle commands')
+        ax[1].set_title('Steering commands')
+        self.throttle_commands, self.steering_commands, self.timestamp = [], [], []
+        self.throttle_plot, = ax[0].plot([], [], color='blue')
+        self.steering_plot, = ax[1].plot([], [], color='red')
+        self.live_plot = FuncAnimation(fig, self.update_live_plots, init_func=self.plot_initializer)
+        self.initial_simulation_time = time.time()
+
+    def plot_initializer(self):
+        for ax in self.axes_list:
+            ax.set_xlim(0, 50)
+            ax.set_ylim(-1, 1)
+            ax.grid(True)
+        return self.throttle_plot, self.steering_plot
+
+    def update_live_plots(self, timestamp):
+        self.throttle_plot.set_data(self.timestamp, self.throttle_commands)
+        self.steering_plot.set_data(self.timestamp, self.steering_commands)
+
+        # set x axis (timestamp) interactively
+        self.axes_list[0].set_xlim(max(0, self.timestamp[-1] - 50),
+                                   max(self.timestamp[-1], 50))
+        self.axes_list[1].set_xlim(max(0, self.timestamp[-1] - 50),
+                                   max(self.timestamp[-1], 50))
+        return self.throttle_plot, self.steering_plot
 
     def __follow_target_waypoints__(self, vehicle: Any, target_waypoint, ego_pid_controller_) -> None:
         self.client.get_world().debug.draw_string(target_waypoint.transform.location, 'O',
@@ -63,6 +100,16 @@ class PathFollowingHandler(InfiniteLoopThread, ABC):
             else:
                 control_signal = ego_pid_controller_.run_step(desired_speed, target_waypoint)
                 vehicle.apply_control(control_signal)
+
+                # append the control signals to the live plotting lists
+
+                self.throttle_commands.append(control_signal.throttle)
+                self.steering_commands.append(control_signal.steer)
+                self.timestamp.append(time.time() - self.initial_simulation_time)
+                print(f"throttle: {control_signal.throttle}, steer: {control_signal.steer},"
+                      f"timestamp: {time.time() - self.initial_simulation_time}")
+                plt.show()  # Block execution until the plot is closed
+                plt.pause(1e-9)  # Give time for the plot to update
 
     def visualize_road_id(self, road_id: int, filtered_points_index: int, life_time: int = 5) -> None:
         # For debugging purposes.
@@ -87,7 +134,7 @@ class PathFollowingHandler(InfiniteLoopThread, ABC):
         return vehicle
 
     @staticmethod
-    def pid_controller(vehicle, args_lateral: dict, args_longitudinal: dict) -> VehiclePIDController:
+    def set_pid_controller(vehicle, args_lateral: dict, args_longitudinal: dict) -> VehiclePIDController:
         ego_pid_controller_ = VehiclePIDController(vehicle, args_lateral=args_lateral,
                                                    args_longitudinal=args_longitudinal)
         return ego_pid_controller_
@@ -114,44 +161,47 @@ class PathFollowingHandler(InfiniteLoopThread, ABC):
             else:
                 filtered_waypoints = filter_waypoints(self.waypoints, road_id=current_road_id)
                 target_waypoint = filtered_waypoints[current_filtered_point_index]
+
             self.__follow_target_waypoints__(vehicle, target_waypoint, ego_pid_controller_)
             self.previous_waypoint = target_waypoint
 
-    def vehicle_and_controller_inputs(self, ego_vehicle_, ego_pid_controller_):
+    def set_vehicle_and_controller_inputs(self, ego_vehicle_, ego_pid_controller_):
         self.ego_vehicle = ego_vehicle_
         self.ego_pid_controller = ego_pid_controller_
+        self.actor_list.append(self.ego_vehicle)
 
-    def __step__(self):
-        if self.debug_mode:
-            self.visualize_road_id(road_id=self.waypoints_to_visualize['road_id'][0],
-                                   filtered_points_index=self.waypoints_to_visualize['filtered_points_index'][0])
-            sys.exit(1)
-
+    def exec(self):
         if not self.reached_destination:
             self.follow_trajectory(self.ego_vehicle, self.ego_pid_controller)
             self.reached_destination = True
             print("Destination has been reached.")
         else:
-            sys.exit(1)
+            print("Destination is already reached. Skipping the path following algorithm.")
 
     def terminate(self):
         print("Terminating trajectory following handler")
-        self.join()
+        for actor in self.actor_list:
+            actor.destroy()
+        print("All actors are destroyed. Path following handler is terminated.")
 
 
 if __name__ == '__main__':
     client_ = carla.Client("localhost", 2000)
     client_.set_timeout(8.0)
-    path_following_handler = PathFollowingHandler(client=client_, debug_mode=False)
+    path_following_handler = PathFollowingHandler(client=client_)
+
+    # to visualize a road id region:
+    # path_following_handler.visualize_road_id(road_id=10, filtered_points_index=5, life_time=30)
+    # sys.exit(1)
+
     ego_spawn_point = path_following_handler.ego_spawn_point
-    if path_following_handler.debug_mode:
-        path_following_handler.start()
-    else:
-        ego_vehicle = \
-            path_following_handler.spawn_ego_vehicles(road_id=ego_spawn_point["road_id"],
-                                                      filtered_points_index=ego_spawn_point["filtered_points_index"])
-        ego_pid_controller = path_following_handler.pid_controller(ego_vehicle,
+    ego_vehicle = \
+        path_following_handler.spawn_ego_vehicles(road_id=ego_spawn_point["road_id"],
+                                                  filtered_points_index=ego_spawn_point["filtered_points_index"])
+    ego_pid_controller = path_following_handler.set_pid_controller(ego_vehicle,
                                                                    path_following_handler.pid_values_lateral,
                                                                    path_following_handler.pid_values_longitudinal)
-        path_following_handler.vehicle_and_controller_inputs(ego_vehicle, ego_pid_controller)
-        path_following_handler.start()
+    path_following_handler.set_vehicle_and_controller_inputs(ego_vehicle, ego_pid_controller)
+    path_following_handler.exec()
+    # terminate the path following handler as well as the actor list
+    path_following_handler.terminate()

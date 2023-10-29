@@ -49,19 +49,16 @@ class TrajectoryToFollow:
         return ego_spawn_point
 
 
-class InfiniteLoopThread(threading.Thread):
-    def __init__(self, name=None):
-        threading.Thread.__init__(self, name=name)
-        self._terminate = False
+class PIDControllerProperties:
+    def __init__(self) -> None:
+        self.k_p = None
+        self.k_i = None
+        self.k_d = None
 
-    def join(self, **kwargs):
-        self._terminate = True
-        super().join(**kwargs)
+    def set_pid_gains(self, k_p: float, k_i: float, k_d: float) -> None:
+        self.k_p = k_p
+        self.k_i = k_i
+        self.k_d = k_d
 
-    def run(self) -> None:
-        while not self._terminate:
-            self.__step__()
-        print("Thread [{}] terminated.".format(self.name))
-
-    def __step__(self, *args, **kwargs):  # the only function needs to be implemented by inherited classes
-        raise NotImplementedError
+    def get_pid_gains(self) -> Tuple[float, float, float]:
+        return self.k_p, self.k_i, self.k_d
