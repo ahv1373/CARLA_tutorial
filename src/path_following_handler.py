@@ -93,12 +93,11 @@ class PathFollowingHandler:
             vehicle_loc = vehicle.get_location()
             vehicle_to_target_distance = math.sqrt((target_waypoint.transform.location.x - vehicle_loc.x) ** 2
                                                    + (target_waypoint.transform.location.y - vehicle_loc.y) ** 2)
-            desired_speed = self.desired_speed
 
             if vehicle_to_target_distance < self.vehicle_to_target_distance_threshold:
                 break
             else:
-                control_signal = ego_pid_controller_.run_step(desired_speed, target_waypoint)
+                control_signal = ego_pid_controller_.run_step(self.desired_speed, target_waypoint)
                 vehicle.apply_control(control_signal)
 
                 # append the control signals to the live plotting lists
@@ -191,7 +190,8 @@ if __name__ == '__main__':
     path_following_handler = PathFollowingHandler(client=client_)
 
     # to visualize a road id region:
-    # path_following_handler.visualize_road_id(road_id=10, filtered_points_index=5, life_time=30)
+    # import sys
+    # path_following_handler.visualize_road_id(road_id=10, filtered_points_index=50, life_time=30)
     # sys.exit(1)
 
     ego_spawn_point = path_following_handler.ego_spawn_point

@@ -1,4 +1,3 @@
-import threading
 from typing import Tuple, Any, Dict, Union
 
 import carla
@@ -6,7 +5,6 @@ import carla
 
 def draw_waypoints(world_, waypoints_, road_id=None, life_time=50.0):
     for waypoint in waypoints_:
-
         if waypoint.road_id == road_id:
             world_.debug.draw_string(waypoint.transform.location, 'O', draw_shadow=False,
                                      color=carla.Color(r=0, g=255, b=0), life_time=life_time,
@@ -39,11 +37,11 @@ class TrajectoryToFollow:
                                       .format(self.trajectory_index))
         return carla_map, road_id_list, filtered_point_index_list
 
-    def get_ego_vehicle_spwan_point(self) -> Union[Dict[str, int], Dict[str, int]]:
+    def get_ego_vehicle_spwan_point(self):
         if self.trajectory_index == 0:
-            ego_spawn_point: Union = {'road_id': 13, 'filtered_points_index': 0}
+            ego_spawn_point: dict = {'road_id': 13, 'filtered_points_index': 0}
         elif self.trajectory_index == 1:
-            ego_spawn_point: Union = {'road_id': 1, 'filtered_points_index': 4}
+            ego_spawn_point: dict = {'road_id': 1, 'filtered_points_index': 4}
         else:
             raise NotImplementedError('A trajectory with index {} has not been implemented.')
         return ego_spawn_point
