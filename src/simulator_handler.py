@@ -4,7 +4,7 @@ import carla
 import cv2
 import numpy as np
 import pandas as pd
-from matplotlib import pyplot as plt
+import pygame
 
 
 class SimulatorHandler:
@@ -34,6 +34,15 @@ class SimulatorHandler:
             self.vehicle_list = []
             self.IM_WIDTH = 800  # Ideally a config file should be defined for such parameters
             self.IM_HEIGHT = 600
+
+            # For visualization purposes using the pygame library
+            pygame.init()
+            self.display = pygame.display.set_mode(
+                (self.IM_WIDTH, self.IM_HEIGHT),
+                pygame.HWSURFACE | pygame.DOUBLEBUF)
+            # Attributes are: Hardware surface and double buffer which mean that the display is
+            # rendered in the GPU and the display is double buffered
+
             print("Successfully connected to CARLA client")
         except Exception as error:
             raise Exception(f"Error while initializing the simulator: {error}")
@@ -45,6 +54,12 @@ class SimulatorHandler:
         self.vehicle_blueprint = self.blueprint_library.filter("model3")[0]  # choosing the car
         self.spawn_point = self.world.get_map().get_spawn_points()[spawn_index]
         self.vehicle = self.world.spawn_actor(self.vehicle_blueprint, self.spawn_point)
+
+        # Visualizing the spawn point of the ego vehicle on the CARLA Client
+        self.world.debug.draw_string(self.spawn_point.location, 'O',
+                                     color=carla.Color(r=255, g=0, b=0),
+                                     life_time=20)
+
         self.actor_list.append(self.vehicle)
 
     def set_weather(self, weather=carla.WeatherParameters.ClearNoon):
@@ -85,16 +100,16 @@ class SimulatorHandler:
         return ego_imu
 
     def rgb_cam_callback(self, image):
+        # Savde the image to disk
         image.save_to_disk("data/rgb_cam/%06d.jpg" % image.frame)
-        raw_image = np.array(image.raw_data)
-
-        rgba_image = raw_image.reshape((self.IM_HEIGHT, self.IM_WIDTH, 4))  # because carla rgb cam is rgba
-        rgb_image = rgba_image[:, :, :3]
-        rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB)
-        plt.imshow(rgb_image)
-        plt.show()
-        # cv2.imshow("rgb camera", rgb_image)  # FixMe: Replace with pygame visualization
-        # cv2.waitKey(1)
+        # Visualize the image using pygame
+        img_rgba = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
+        img_rgba = np.reshape(img_rgba, (image.height, image.width, 4))
+        img_bgr = img_rgba[:, :, :3]  # Get rid of the alpha channel which is only used for transparency
+        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+        image_surface = pygame.surfarray.make_surface(img_rgb.swapaxes(0, 1))
+        self.display.blit(image_surface, (0, 0))
+        pygame.display.flip()
 
     def imu_callback(self, imu):  # accelerometer is m/s^2 and gyroscope data is rad/sec
         imu_dict = {}
@@ -118,3 +133,19 @@ class SimulatorHandler:
         gnss_dict["altitude"] = gnss.altitude
         self.gnss_dataframe = self.gnss_dataframe.append(gnss_dict, ignore_index=True)
         self.gnss_dataframe.to_csv(os.path.join(self.save_dir, "gnss.csv"), index=False)
+
+    def terminate(self):
+        for actor in self.actor_list:
+            actor.destroy()
+        pygame.quit()
+        self.world = None
+        self.actor_list = []
+        self.vehicle_list = []
+        self.vehicle = None
+        self.rgb_cam_sensor = None
+        self.vehicle_blueprint = None
+        self.spawn_point = None
+        self.imu_dataframe = pd.DataFrame({})
+        self.gnss_dataframe = pd.DataFrame({})
+
+        print("Simulation terminated.")
