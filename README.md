@@ -16,49 +16,34 @@ Commit your changes and make sure to push them as well.
 The due date will be April 5, 2025.
 
 
-[//]: # (## Assignment #2)
+## Assignment #2 (Automotive Students Only)
 
-[//]: # (Task #1: Integrate what you have learned in session 1 and 2 by adding RGB camera, IMU, and LIDAR sensor)
+Task #1: Integrate what you have learned in session 1 and 2 by adding RGB camera, IMU, and LIDAR sensor
 
-[//]: # (to the vehicle and control it to follow the path by taking advantage of PID controller.)
+to the vehicle and control it to follow the path by taking advantage of PID controller.
 
-[//]: # (Store the sensor's data on your system.)
+Store the sensor's data on your system.
 
-[//]: # ()
-[//]: # (Task #2: Tune the PID gains for both longitudinal and later control of the vehicle.)
 
-[//]: # (What are the important criteria for appropriate tuning of control parameters?)
+Task #2: Tune the PID gains for both longitudinal and lateral control of the vehicle.
 
-[//]: # ()
-[//]: # (Task #3: Instead of simply selecting one specific waypoint and passing it to the controller,)
+What are the important criteria for appropriate tuning of control parameters? What is the effect of each individual gain?
+What approaches did you utilise to tune the gains and what goals did you set for the tuning process?
+Compare the performance of the path-tracking controller in various pid gains (for lateral control) and plot the control action,
+cross track error, vehicle location, vehicle speed, and desired trajectory. According to your comparison and results, what final gains you would suggest for the controller?
 
-[//]: # (update the codes to automatically select all subsequent waypoints in each road_id of the carla HD map.)
 
-[//]: # (To do so, utilize waypoint.next_until_lane_end which returns the list of the subsequent waypoints.)
+Task #3: Create a looped trajectory for the vehicle and ensure that your autonomous car is capable of following this loop infinitely.
+Email me your results as well as your report in the specified format with the following title:
 
-[//]: # (Your objective should be creating a looped trajectory for the vehicle and ensure that your)
 
-[//]: # (autonomous car is capable of following this loop infinitely.)
+```
 
-[//]: # ()
-[//]: # (Please only sent your codes via GitHub &#40;Do not email me the updated codes&#41;. To do so, please first clone the repository)
+A2-FAMILYNAME-STUDENTNUMBER
 
-[//]: # (and create new branch. The branch name should be:)
+```
 
-[//]: # ()
-[//]: # (```)
+The deadline to deliver the assignment is 05-May-2025.
 
-[//]: # (A2-FAMILYNAME-STUDENTNUMBER)
-
-[//]: # (```)
-
-[//]: # (The deadline to deliver the assignment is 10-June-2023.)
-
-## Assignment #2
-Generate an image dataset from the CARLA simulator containing samples from different weather conditions including day,
-night, rain, and fog. Train a deep convolutional neural network to classify the images based on the weather conditions.
-
-Evaluate the trained model on the test set utilizing relevant criteria in the classification task
-and form the confusion matrix.
-
-The due date will be April 5, 2025.
+## Assignment #3 (Computer Science Students Only)
+Find your assignment in [this document](https://github.com/ahv1373/CARLA_tutorial/blob/main/documents/Assignment_3_computer_science.pdf).
