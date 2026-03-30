@@ -7,13 +7,18 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.callbacks import ModelCheckpoint
-from mock import Mock
 import matplotlib.pyplot as plt
+from mock import Mock
+from sklearn.metrics import classification_report, confusion_matrix
 
+num_of_test_samples = 0
+for root_dir, cur_dir, files in os.walk(r"D:\Set\test"):
+    num_of_test_samples += len(files)
+print('num_of_test_samples count:', num_of_test_samples)
 
 class TrainHyperParameters:
-    def __init__(self, input_shape: Tuple[int, int, int] = (256, 256, 3), number_of_classes: int = 2,
-                 learning_rate: float = 0.001, batch_size: int = 32, number_of_epochs: int = 3) -> None:
+    def __init__(self, input_shape: Tuple[int, int, int] = (256, 256, 3), number_of_classes: int = 4,
+                 learning_rate: float = 0.001, batch_size: int = 32, number_of_epochs: int = 5) -> None:
         self.hyperparameters = Mock()
         self.hyperparameters.input_shape = input_shape
         self.hyperparameters.number_of_classes = number_of_classes
@@ -59,13 +64,19 @@ class TrainCustomCNN(TrainHyperParameters):
         # Define the model architecture
         self.model = keras.models.Sequential([
             keras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=self.hyperparameters.input_shape),
+            keras.layers.Conv2D(32, (3, 3), activation='relu'),
             keras.layers.MaxPooling2D((2, 2)),
+            keras.layers.Dropout(0.25),
+            keras.layers.Conv2D(64, (3, 3), activation='relu'),
             keras.layers.Conv2D(64, (3, 3), activation='relu'),
             keras.layers.MaxPooling2D((2, 2)),
-            keras.layers.Conv2D(128, (3, 3), activation='relu'),
+            keras.layers.Dropout(0.25),
+            keras.layers.Conv2D(64, (3, 3), activation='relu'),
+            keras.layers.Conv2D(64, (3, 3), activation='relu'),
             keras.layers.MaxPooling2D((2, 2)),
+            keras.layers.Dropout(0.25),
             keras.layers.Flatten(),
-            keras.layers.Dense(128, activation='relu'),
+            keras.layers.Dense(512, activation='relu'),
             keras.layers.Dropout(0.5),
             keras.layers.Dense(self.hyperparameters.number_of_classes, activation='softmax')
         ])
@@ -106,6 +117,14 @@ class TrainCustomCNN(TrainHyperParameters):
         # plot loss and accuracy on train and validation set
         self.plot_history(history)
 
+        Y_predicton = self.model.predict_generator(test_generator, num_of_test_samples // self.hyperparameters.batch_size+1)
+        y_prediction = np.argmax(Y_predicton, axis=1)
+        print(confusion_matrix(test_generator.classes, y_prediction))
+        target_names = ['ClearNoon', 'ClearSunset','fog','HardRainSunset']
+        print(classification_report(test_generator.classes, y_prediction, target_names=target_names))
+
+
+
     def plot_history(self, history):
         matplotlib.use('Agg')
         plt.figure(figsize=(10, 5))
@@ -127,7 +146,8 @@ class TrainCustomCNN(TrainHyperParameters):
         self.train(train_generator, test_generator)
 
 
-if __name__ == '__main__':
-    data_dir_ = '/home/ahv/PycharmProjects/Visual-Inertial-Odometry/simulation/CARLA/output/root_dir'
+if __name__ == '__main__':   
+    data_dir_ = r"D:\Set"
     train_custom_cnn = TrainCustomCNN(data_dir_)
     train_custom_cnn.exec()
+    
