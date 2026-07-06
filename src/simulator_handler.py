@@ -1,7 +1,14 @@
 import os
 import queue
 import threading
-
+import sys
+import glob
+try:
+    sys.path.append(glob.glob(
+        r'F:\carla\WindowsNoEditor\PythonAPI\carla\dist\carla-0.9.8-py3.7-win-amd64.egg'
+    )[0])
+except IndexError:
+    raise RuntimeError("Couldn't find the CARLA egg.")
 import carla
 import cv2
 import numpy as np
@@ -20,6 +27,7 @@ class SimulatorHandler:
         # create data save directories (if they don't exist)
         self.save_dir = os.path.join(os.path.dirname(__file__), "data")
         os.makedirs(self.save_dir, exist_ok=True)
+        os.makedirs(os.path.join(self.save_dir, "lidar"), exist_ok=True)
         os.makedirs(os.path.join(self.save_dir, "rgb_cam"), exist_ok=True)
         os.makedirs(os.path.join(self.save_dir, "instance_segmentation_cam"), exist_ok=True)
 
@@ -32,6 +40,8 @@ class SimulatorHandler:
                 self.world: carla.World = client.load_world(town_name)
 
             self.blueprint_library = self.world.get_blueprint_library()
+            for bp in self.blueprint_library.filter("sensor.camera.*"):
+                print("bd:", bp.id)
             self.actor_list = []
             self.vehicle_list = []
             self.IM_WIDTH = 1280  # Ideally a config file should be defined for such parameters
@@ -51,6 +61,9 @@ class SimulatorHandler:
 
         self.imu_dataframe = pd.DataFrame({})
         self.gnss_dataframe = pd.DataFrame({})
+        self.radar_dataframe = pd.DataFrame({})
+        self.collision_dataframe = pd.DataFrame({})
+
 
         self.rgb_image_queue = queue.Queue()
         self.instance_segmentation_image_queue = queue.Queue()
@@ -77,7 +90,7 @@ class SimulatorHandler:
         rgb_camera.set_attribute("image_size_x", f"{self.IM_WIDTH}")
         rgb_camera.set_attribute("image_size_y", f"{self.IM_HEIGHT}")
         rgb_camera.set_attribute("fov", "110")
-        rgb_camera.set_attribute('sensor_tick', str(1 / 30))  # 30 FPS
+        rgb_camera.set_attribute('sensor_tick', str(1 / 15))  # 30 FPS
         spawn_point_rgb = carla.Transform(carla.Location(x=2.5, y=0, z=0.9),
                                           carla.Rotation(pitch=-5, roll=0, yaw=0))
 
@@ -86,11 +99,11 @@ class SimulatorHandler:
         return self.rgb_cam_sensor
 
     def instance_segmentation_cam(self):
-        instance_segmentation_camera = self.blueprint_library.find("sensor.camera.instance_segmentation")
+        instance_segmentation_camera = self.blueprint_library.find("sensor.camera.semantic_segmentation")
         instance_segmentation_camera.set_attribute("image_size_x", f"{self.IM_WIDTH}")
         instance_segmentation_camera.set_attribute("image_size_y", f"{self.IM_HEIGHT}")
         instance_segmentation_camera.set_attribute("fov", "110")
-        instance_segmentation_camera.set_attribute('sensor_tick', str(1 / 30))  # 30 FPS
+        instance_segmentation_camera.set_attribute('sensor_tick', str(1 / 20))  # 30 FPS
         spawn_point_instance_segmentation = carla.Transform(carla.Location(x=2.5, y=0, z=0.9),
                                                             carla.Rotation(pitch=-5, roll=0, yaw=0))
 
@@ -119,17 +132,63 @@ class SimulatorHandler:
                                          attachment_type=carla.AttachmentType.Rigid)
         self.actor_list.append(ego_imu)
         return ego_imu
+    def lidar(self):
+        lidar_bp = self.blueprint_library.find("sensor.lidar.ray_cast")
+        lidar_bp.set_attribute("range", "100")
+        lidar_bp.set_attribute("rotation_frequency", "20")
+        lidar_bp.set_attribute("channels", "64")
+        lidar_bp.set_attribute("points_per_second", "500000")
+        transform = carla.Transform(carla.Location(x=0, y=0, z=2.4))
+        ego_lidar = self.world.spawn_actor(lidar_bp, transform, attach_to=self.vehicle)
+        self.actor_list.append(ego_lidar)
+        return ego_lidar
 
+    def lidar_callback(self, point_cloud):
+        point_cloud.save_to_disk(os.path.join(self.save_dir, "lidar", "%06d.ply" % point_cloud.frame))
+        
+    def radar(self):
+        radar_bp = self.blueprint_library.find("sensor.other.radar")
+        radar_bp.set_attribute("horizontal_fov", "30")
+        radar_bp.set_attribute("vertical_fov", "10")
+        radar_bp.set_attribute("range", "100")
+        transform = carla.Transform(carla.Location(x=2.0, z=1.0))
+        ego_radar = self.world.spawn_actor(radar_bp, transform, attach_to=self.vehicle)
+        self.actor_list.append(ego_radar)
+        return ego_radar
+
+    def radar_callback(self, radar_data):
+        for detection in radar_data:
+            row = {"timestamp": radar_data.timestamp, "depth": detection.depth,
+                "azimuth": detection.azimuth, "altitude": detection.altitude,
+                "velocity": detection.velocity}
+            self.radar_dataframe = pd.concat([self.radar_dataframe, pd.DataFrame([row])], ignore_index=True)
+        self.radar_dataframe.to_csv(os.path.join(self.save_dir, "radar.csv"), index=False)
+        
+    def collision(self):
+        collision_bp = self.blueprint_library.find("sensor.other.collision")
+        ego_collision = self.world.spawn_actor(collision_bp, carla.Transform(), attach_to=self.vehicle)
+        self.actor_list.append(ego_collision)
+        return ego_collision
+
+    def collision_callback(self, event):
+        row = {"timestamp": event.timestamp,
+            "other_actor": event.other_actor.type_id,
+            "impulse_x": event.normal_impulse.x,
+            "impulse_y": event.normal_impulse.y,
+            "impulse_z": event.normal_impulse.z}
+        self.collision_dataframe = pd.concat([self.collision_dataframe, pd.DataFrame([row])], ignore_index=True)
+        self.collision_dataframe.to_csv(os.path.join(self.save_dir, "collision.csv"), index=False)
+        
     def _process_image_saving(self):
         while True:
-            # Pulls the next image from the queue and saves it
             rgb_img = self.rgb_image_queue.get()
             instance_segmentation_img = self.instance_segmentation_image_queue.get()
-            if rgb_img is None or instance_segmentation_img is None: # Sentinel value to stop the thread
+            if rgb_img is None or instance_segmentation_img is None:  # Sentinel value to stop the thread
                 break
-            rgb_img.save_to_disk("data/rgb_cam/%06d.jpg" % rgb_img.frame)
-            instance_segmentation_img.save_to_disk("data/instance_segmentation_cam/%06d.png" % instance_segmentation_img.frame)
-            # mark the task as done for both queues
+            rgb_img.save_to_disk(
+                os.path.join(self.save_dir, "rgb_cam", "%06d.jpg" % rgb_img.frame))
+            instance_segmentation_img.save_to_disk(
+                os.path.join(self.save_dir, "instance_segmentation_cam", "%06d.png" % instance_segmentation_img.frame))
             self.rgb_image_queue.task_done()
             self.instance_segmentation_image_queue.task_done()
 
@@ -178,30 +237,32 @@ class SimulatorHandler:
         self.gnss_dataframe.to_csv(os.path.join(self.save_dir, "gnss.csv"), index=False)
 
     def terminate(self):
-        print(
-            f"Waiting for {self.rgb_image_queue.qsize()} RGB frames and {self.instance_segmentation_image_queue.qsize()} Seg frames to finish saving...")
+        # 1. Stop all sensors FIRST so no more callbacks fire
+        for actor in self.actor_list:
+            if actor is not None and actor.is_alive and isinstance(actor, carla.Sensor):
+                if actor.is_listening:
+                    actor.stop()
 
-        # 1. Block the main thread until the queues are completely empty
-        # Do this BEFORE destroying anything!
+        # 2. Wait for queued images to finish saving
+        print(f"Waiting for {self.rgb_image_queue.qsize()} RGB frames and "
+            f"{self.instance_segmentation_image_queue.qsize()} Seg frames to finish saving...")
         self.rgb_image_queue.join()
         self.instance_segmentation_image_queue.join()
+
+        # 3. Send the sentinel so the saver thread exits cleanly, then join it
+        self.rgb_image_queue.put(None)
+        self.instance_segmentation_image_queue.put(None)
+        self.save_thread.join(timeout=5)
         print("All frames saved successfully!")
 
-        # 2. Now it is safe to destroy the actors
+        # 4. Now destroy the actors
         for actor in self.actor_list:
             if actor is not None and actor.is_alive:
                 actor.destroy()
 
-        # 3. Clean up the rest
+        # 5. Clean up the rest
         pygame.quit()
         self.world = None
         self.actor_list = []
-        self.vehicle_list = []
-        self.vehicle = None
-        self.rgb_cam_sensor = None
-        self.vehicle_blueprint = None
-        self.spawn_point = None
-        self.imu_dataframe = pd.DataFrame({})
-        self.gnss_dataframe = pd.DataFrame({})
-
+        # ... (rest of the resets as before)
         print("Simulation terminated.")
